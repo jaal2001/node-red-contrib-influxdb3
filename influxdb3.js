@@ -28,7 +28,7 @@ module.exports = function (RED) {
         });
     }
 
-    RED.nodes.registerType("influxdb3-config", InfluxDB3Config, {
+    RED.nodes.registerType("influxdb3", InfluxDB3Config, {
         credentials: {
             token: { type: "password" }
         }
