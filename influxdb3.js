@@ -1,335 +1,204 @@
-var _ = require('lodash');
+const _ = require('lodash');
+const { InfluxDBClient, Point } = require('@influxdata/influxdb3-client');
 
 module.exports = function (RED) {
-    "use strict";
-    var { InfluxDBClient, Point } = require('@influxdata/influxdb3-client');
-
-    /**
-     * Config node for InfluxDB 3.0
-     */
-    function InfluxConfigNode(n) {
+    function InfluxDB3Config(n) {
         RED.nodes.createNode(this, n);
         this.name = n.name;
         this.host = n.host;
+        this.port = n.port;
         this.database = n.database;
         this.timeout = n.timeout || 10;
 
-        // Create client options
         const clientOptions = {
-            host: this.host,
+            host: `${this.host}:${this.port}`,
             token: this.credentials.token,
             database: this.database,
-            timeout: Math.floor(this.timeout * 1000) // convert seconds to milliseconds
+            timeout: Math.floor(this.timeout * 1000)
         };
 
         try {
             this.client = new InfluxDBClient(clientOptions);
-        } catch (error) {
-            this.error("Failed to create InfluxDB client: " + error.message);
+        } catch (err) {
+            this.error("Failed to create InfluxDB 3 client: " + err.message);
         }
 
-        // Clean up client when node is closed
-        this.on('close', function() {
-            if (this.client) {
-                this.client.close();
-            }
+        this.on("close", () => {
+            if (this.client) this.client.close();
         });
     }
 
-    RED.nodes.registerType("influxdb3", InfluxConfigNode, {
+    RED.nodes.registerType("influxdb3-config", InfluxDB3Config, {
         credentials: {
             token: { type: "password" }
         }
     });
 
-    /**
-     * Helper function to create Point from various data formats
-     */
-    function createPointFromData(measurement, data) {
-        const point = new Point(measurement);
-        
-        if (_.isPlainObject(data)) {
-            // Handle object with fields and optional tags
-            for (const [key, value] of Object.entries(data)) {
-                if (key === 'time') {
-                    point.timestamp(value);
-                } else if (key === 'tags' && _.isPlainObject(value)) {
-                    // Handle tags separately
-                    for (const [tagKey, tagValue] of Object.entries(value)) {
-                        point.tag(tagKey, String(tagValue));
-                    }
-                } else {
-                    // Add as field
-                    addFieldToPoint(point, key, value);
-                }
-            }
-        } else {
-            // Simple value
-            addFieldToPoint(point, 'value', data);
-        }
-        
-        return point;
-    }
-
-    /**
-     * Helper function to add field to point with proper type handling
-     */
     function addFieldToPoint(point, name, value) {
         if (typeof value === 'number') {
-            if (Number.isInteger(value)) {
-                point.intField(name, value);
-            } else {
-                point.floatField(name, value);
-            }
+            Number.isInteger(value) ? point.intField(name, value) : point.floatField(name, value);
+        } else if (typeof value === 'boolean') {
+            point.booleanField(name, value);
         } else if (typeof value === 'string') {
-            // Check if string represents an integer (ending with 'i')
-            if (/^-?\d+i$/.test(value)) {
-                const intValue = parseInt(value.substring(0, value.length - 1));
-                point.intField(name, intValue);
+            const intMatch = value.match(/^-?\d+i$/);
+            if (intMatch) {
+                point.intField(name, parseInt(value.slice(0, -1)));
             } else {
                 point.stringField(name, value);
             }
-        } else if (typeof value === 'boolean') {
-            point.booleanField(name, value);
         } else {
-            // Convert other types to string
             point.stringField(name, String(value));
         }
     }
 
-    /**
-     * Output node to write to InfluxDB 3.0
-     */
-    function InfluxOutNode(n) {
+    function InfluxDB3Out(n) {
         RED.nodes.createNode(this, n);
+        this.name = n.name;
         this.measurement = n.measurement;
-        this.influxdb = n.influxdb;
-        this.influxdbConfig = RED.nodes.getNode(this.influxdb);
+        this.influxdb = RED.nodes.getNode(n.influxdb);
 
-        if (!this.influxdbConfig) {
-            this.error(RED._("influxdb.errors.missingconfig"));
+        if (!this.influxdb?.client) {
+            this.error("Missing InfluxDB 3 client");
             return;
         }
 
-        if (!this.influxdbConfig.client) {
-            this.error("InfluxDB client not available");
-            return;
-        }
-
-        var node = this;
-
-        node.on("input", async function (msg, send, done) {
+        this.on("input", async (msg, send, done) => {
             try {
-                const measurement = msg.hasOwnProperty('measurement') ? msg.measurement : node.measurement;
+                const measurement = msg.measurement || this.measurement;
+                const db = msg.database || this.influxdb.database;
+
                 if (!measurement) {
-                    return done(RED._("influxdb.errors.nomeasurement"));
+                    return done("Missing measurement");
                 }
 
-                const database = msg.hasOwnProperty('database') ? msg.database : node.influxdbConfig.database;
-                let points = [];
-
-                if (_.isArray(msg.payload)) {
-                    // Handle array of data points
-                    if (msg.payload.length > 0 && _.isArray(msg.payload[0])) {
-                        // Array of [fields, tags] arrays
-                        msg.payload.forEach(element => {
-                            const point = new Point(measurement);
-                            
-                            // Add fields
-                            if (element[0] && _.isPlainObject(element[0])) {
-                                for (const [key, value] of Object.entries(element[0])) {
-                                    if (key === 'time') {
-                                        point.timestamp(value);
-                                    } else {
-                                        addFieldToPoint(point, key, value);
-                                    }
-                                }
-                            }
-                            
-                            // Add tags
-                            if (element[1] && _.isPlainObject(element[1])) {
-                                for (const [key, value] of Object.entries(element[1])) {
-                                    point.tag(key, String(value));
-                                }
-                            }
-                            
-                            points.push(point);
-                        });
-                    } else {
-                        // Single point with [fields, tags]
-                        const point = new Point(measurement);
-                        
-                        // Add fields
-                        if (msg.payload[0] && _.isPlainObject(msg.payload[0])) {
-                            for (const [key, value] of Object.entries(msg.payload[0])) {
-                                if (key === 'time') {
-                                    point.timestamp(value);
-                                } else {
-                                    addFieldToPoint(point, key, value);
-                                }
-                            }
+                const buildPoint = (data, tags = {}) => {
+                    const point = new Point(measurement);
+                    for (const [k, v] of Object.entries(data)) {
+                        if (k === 'time') {
+                            point.timestamp(v);
+                        } else {
+                            addFieldToPoint(point, k, v);
                         }
-                        
-                        // Add tags
-                        if (msg.payload[1] && _.isPlainObject(msg.payload[1])) {
-                            for (const [key, value] of Object.entries(msg.payload[1])) {
-                                point.tag(key, String(value));
-                            }
-                        }
-                        
-                        points.push(point);
                     }
+                    for (const [k, v] of Object.entries(tags)) {
+                        point.tag(k, String(v));
+                    }
+                    return point;
+                };
+
+                const payload = msg.payload;
+                const points = [];
+
+                if (Array.isArray(payload)) {
+                    if (Array.isArray(payload[0])) {
+                        payload.forEach(([fields, tags]) => points.push(buildPoint(fields, tags)));
+                    } else {
+                        points.push(buildPoint(payload[0], payload[1]));
+                    }
+                } else if (_.isPlainObject(payload)) {
+                    points.push(buildPoint(payload));
                 } else {
-                    // Single data point
-                    const point = createPointFromData(measurement, msg.payload);
+                    const point = new Point(measurement);
+                    addFieldToPoint(point, 'value', payload);
                     points.push(point);
                 }
 
-                // Write points to InfluxDB
-                for (const point of points) {
-                    await node.influxdbConfig.client.write(point.toLineProtocol(), database);
+                for (const pt of points) {
+                    await this.influxdb.client.write(pt.toLineProtocol(), db);
                 }
 
                 done();
-            } catch (error) {
-                msg.influx_error = {
-                    errorMessage: error.message
-                };
-                done(error);
+            } catch (err) {
+                msg.influx_error = { errorMessage: err.message };
+                done(err);
             }
         });
     }
 
-    RED.nodes.registerType("influxdb3 out", InfluxOutNode);
+    RED.nodes.registerType("influxdb3 out", InfluxDB3Out);
 
-    /**
-     * Batch output node for multiple measurements
-     */
-    function InfluxBatchNode(n) {
+    function InfluxDB3Batch(n) {
         RED.nodes.createNode(this, n);
-        this.influxdb = n.influxdb;
-        this.influxdbConfig = RED.nodes.getNode(this.influxdb);
+        this.name = n.name;
+        this.influxdb = RED.nodes.getNode(n.influxdb);
 
-        if (!this.influxdbConfig) {
-            this.error(RED._("influxdb.errors.missingconfig"));
+        if (!this.influxdb?.client) {
+            this.error("Missing InfluxDB 3 client");
             return;
         }
 
-        if (!this.influxdbConfig.client) {
-            this.error("InfluxDB client not available");
-            return;
-        }
-
-        var node = this;
-
-        node.on("input", async function (msg, send, done) {
+        this.on("input", async (msg, send, done) => {
             try {
-                const database = msg.hasOwnProperty('database') ? msg.database : node.influxdbConfig.database;
-                
-                if (!_.isArray(msg.payload)) {
-                    return done(new Error("Payload must be an array for batch operations"));
+                const db = msg.database || this.influxdb.database;
+                const payload = msg.payload;
+
+                if (!Array.isArray(payload)) {
+                    return done(new Error("Payload must be an array"));
                 }
 
-                // Process each item in the batch
-                for (const item of msg.payload) {
-                    if (!item.measurement) {
-                        continue; // Skip items without measurement
-                    }
-
+                for (const item of payload) {
+                    if (!item.measurement || !item.fields) continue;
                     const point = new Point(item.measurement);
-
-                    // Add fields
-                    if (item.fields && _.isPlainObject(item.fields)) {
-                        for (const [key, value] of Object.entries(item.fields)) {
-                            addFieldToPoint(point, key, value);
+                    for (const [k, v] of Object.entries(item.fields)) {
+                        addFieldToPoint(point, k, v);
+                    }
+                    if (item.tags) {
+                        for (const [k, v] of Object.entries(item.tags)) {
+                            point.tag(k, String(v));
                         }
                     }
-
-                    // Add tags
-                    if (item.tags && _.isPlainObject(item.tags)) {
-                        for (const [key, value] of Object.entries(item.tags)) {
-                            point.tag(key, String(value));
-                        }
-                    }
-
-                    // Add timestamp if provided
                     if (item.timestamp) {
                         point.timestamp(item.timestamp);
                     }
-
-                    // Write the point
-                    await node.influxdbConfig.client.write(point.toLineProtocol(), database);
+                    await this.influxdb.client.write(point.toLineProtocol(), db);
                 }
 
                 done();
-            } catch (error) {
-                msg.influx_error = {
-                    errorMessage: error.message
-                };
-                done(error);
+            } catch (err) {
+                msg.influx_error = { errorMessage: err.message };
+                done(err);
             }
         });
     }
 
-    RED.nodes.registerType("influxdb3 batch", InfluxBatchNode);
+    RED.nodes.registerType("influxdb3 batch", InfluxDB3Batch);
 
-    /**
-     * Input node to query InfluxDB 3.0
-     */
-    function InfluxInNode(n) {
+    function InfluxDB3In(n) {
         RED.nodes.createNode(this, n);
-        this.influxdb = n.influxdb;
+        this.name = n.name;
         this.query = n.query;
-        this.queryType = n.queryType || 'sql'; // 'sql' or 'influxql'
-        this.influxdbConfig = RED.nodes.getNode(this.influxdb);
+        this.queryType = n.queryType || 'sql';
+        this.influxdb = RED.nodes.getNode(n.influxdb);
 
-        if (!this.influxdbConfig) {
-            this.error(RED._("influxdb.errors.missingconfig"));
+        if (!this.influxdb?.client) {
+            this.error("Missing InfluxDB 3 client");
             return;
         }
 
-        if (!this.influxdbConfig.client) {
-            this.error("InfluxDB client not available");
-            return;
-        }
-
-        var node = this;
-
-        node.on("input", async function (msg, send, done) {
+        this.on("input", async (msg, send, done) => {
             try {
-                const query = msg.hasOwnProperty('query') ? msg.query : node.query;
-                if (!query) {
-                    return done(RED._("influxdb.errors.noquery"));
+                const db = msg.database || this.influxdb.database;
+                const query = msg.query || this.query;
+                const type = msg.queryType || this.queryType;
+
+                if (!query) return done("Missing query");
+
+                const options = { type: type === 'influxql' ? 'influxql' : 'sql' };
+                const result = await this.influxdb.client.query(query, db, options);
+                const rows = [];
+                for await (const r of result) {
+                    rows.push(r);
                 }
 
-                const database = msg.hasOwnProperty('database') ? msg.database : node.influxdbConfig.database;
-                const queryType = msg.hasOwnProperty('queryType') ? msg.queryType : node.queryType;
-                
-                const queryOptions = {};
-                if (queryType === 'influxql') {
-                    queryOptions.type = 'influxql';
-                }
-
-                // Execute query
-                const queryResult = await node.influxdbConfig.client.query(query, database, queryOptions);
-                
-                // Collect results
-                const results = [];
-                for await (const row of queryResult) {
-                    results.push(row);
-                }
-
-                msg.payload = results;
+                msg.payload = rows;
                 send(msg);
                 done();
-            } catch (error) {
-                msg.influx_error = {
-                    errorMessage: error.message
-                };
-                done(error);
+            } catch (err) {
+                msg.influx_error = { errorMessage: err.message };
+                done(err);
             }
         });
     }
 
-    RED.nodes.registerType("influxdb3 in", InfluxInNode);
-}
+    RED.nodes.registerType("influxdb3 in", InfluxDB3In);
+};

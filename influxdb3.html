@@ -1,156 +1,151 @@
-<!-- Config Node -->
+<!-- InfluxDB 3.0 Config Node UI -->
 <script type="text/html" data-template-name="influxdb3-config">
-    <div class="form-row">
-        <label for="node-config-input-host"><i class="fa fa-globe"></i> Host</label>
-        <input type="text" id="node-config-input-host" placeholder="localhost" />
-    </div>
-    <div class="form-row">
-        <label for="node-config-input-port"><i class="fa fa-random"></i> Port</label>
-        <input type="number" id="node-config-input-port" placeholder="8086" />
-    </div>
-    <div class="form-row">
-        <label for="node-config-input-database"><i class="fa fa-database"></i> Database</label>
-        <input type="text" id="node-config-input-database" placeholder="my-database" />
-    </div>
-    <div class="form-row">
-        <label for="node-config-input-token"><i class="fa fa-lock"></i> Token</label>
-        <input type="password" id="node-config-input-token" placeholder="Token" />
-    </div>
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-host"><i class="fa fa-server"></i> Host</label>
+    <input type="text" id="node-config-input-host" placeholder="localhost">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-port"><i class="fa fa-random"></i> Port</label>
+    <input type="text" id="node-config-input-port" placeholder="8086">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-database"><i class="fa fa-database"></i> Database</label>
+    <input type="text" id="node-config-input-database">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-token"><i class="fa fa-lock"></i> Token</label>
+    <input type="password" id="node-config-input-token">
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-timeout"><i class="fa fa-clock-o"></i> Timeout (s)</label>
+    <input type="number" id="node-config-input-timeout" placeholder="10">
+  </div>
 </script>
 
-<script type="text/html" data-help-name="influxdb3-config">
-    <p>Konfiguration für InfluxDB 3.0</p>
-</script>
-
-<!-- Output Node -->
-<script type="text/html" data-template-name="influxdb3 out">
-    <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name">
-    </div>
-    <div class="form-row">
-        <label for="node-input-influxdb"><i class="fa fa-cog"></i> Server</label>
-        <input type="text" id="node-input-influxdb">
-    </div>
-    <div class="form-row">
-        <label for="node-input-measurement"><i class="fa fa-pencil"></i> Measurement</label>
-        <input type="text" id="node-input-measurement" placeholder="temperature">
-    </div>
-</script>
-
-<script type="text/html" data-help-name="influxdb3 out">
-    <p>Schreibt einen einzelnen Datenpunkt in InfluxDB 3.0.</p>
-    <p>Verwende <code>msg.payload</code> als Objekt mit Feldern. Optional können Tags unter <code>msg.payload.tags</code> angegeben werden.</p>
-</script>
-
-<!-- Batch Output Node -->
-<script type="text/html" data-template-name="influxdb3 batch">
-    <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name">
-    </div>
-    <div class="form-row">
-        <label for="node-input-influxdb"><i class="fa fa-cog"></i> Server</label>
-        <input type="text" id="node-input-influxdb">
-    </div>
-</script>
-
-<script type="text/html" data-help-name="influxdb3 batch">
-    <p>Schreibt mehrere Punkte in InfluxDB 3.0.</p>
-    <p><code>msg.payload</code> muss ein Array von Objekten sein, jeweils mit <code>measurement</code>, <code>fields</code>, <code>tags</code> und optional <code>timestamp</code>.</p>
-</script>
-
-<!-- Input Node -->
-<script type="text/html" data-template-name="influxdb3 in">
-    <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
-        <input type="text" id="node-input-name">
-    </div>
-    <div class="form-row">
-        <label for="node-input-influxdb"><i class="fa fa-cog"></i> Server</label>
-        <input type="text" id="node-input-influxdb">
-    </div>
-    <div class="form-row">
-        <label for="node-input-queryType"><i class="fa fa-code"></i> Query Type</label>
-        <select id="node-input-queryType">
-            <option value="sql">SQL</option>
-            <option value="influxql">InfluxQL</option>
-        </select>
-    </div>
-    <div class="form-row">
-        <label for="node-input-query"><i class="fa fa-terminal"></i> Query</label>
-        <input type="text" id="node-input-query" placeholder="SELECT * FROM ...">
-    </div>
-</script>
-
-<script type="text/html" data-help-name="influxdb3 in">
-    <p>Führt eine SQL- oder InfluxQL-Abfrage gegen InfluxDB 3.0 aus.</p>
-    <p>Ergebnis wird in <code>msg.payload</code> zurückgegeben.</p>
-</script>
-
-<!-- JS: Registrierung -->
 <script type="text/javascript">
-    RED.nodes.registerType("influxdb3-config", {
-        category: "config",
-        defaults: {
-            host: { value: "localhost", required: true },
-            port: { value: 8086, required: true },
-            database: { value: "", required: true },
-            token: { value: "", required: true }
-        },
-        credentials: {
-            token: { type: "password" }
-        },
-        label: function () {
-            return this.host + ":" + this.port;
-        }
-    });
+  RED.nodes.registerType("influxdb3-config", {
+    category: "config",
+    defaults: {
+      name: { value: "" },
+      host: { value: "localhost", required: true },
+      port: { value: 8086, required: true },
+      database: { value: "", required: true },
+      timeout: { value: 10 }
+    },
+    credentials: {
+      token: { type: "password" }
+    },
+    label: function () {
+      return this.name || (this.host + ":" + this.port);
+    }
+  });
+</script>
 
-    RED.nodes.registerType("influxdb3 out", {
-        category: "storage-output",
-        color: "#44b39d",
-        defaults: {
-            name: { value: "" },
-            measurement: { value: "" },
-            influxdb: { type: "influxdb3-config", required: true }
-        },
-        inputs: 1,
-        outputs: 0,
-        icon: "font-awesome/fa-upload",
-        label: function () {
-            return this.name || "influxdb3 out";
-        }
-    });
+<!-- InfluxDB 3.0 Output Node -->
+<script type="text/html" data-template-name="influxdb3 out">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-influxdb"><i class="fa fa-cog"></i> Server</label>
+    <input type="text" id="node-input-influxdb">
+  </div>
+  <div class="form-row">
+    <label for="node-input-measurement"><i class="fa fa-rss"></i> Measurement</label>
+    <input type="text" id="node-input-measurement">
+  </div>
+</script>
 
-    RED.nodes.registerType("influxdb3 batch", {
-        category: "storage-output",
-        color: "#44b39d",
-        defaults: {
-            name: { value: "" },
-            influxdb: { type: "influxdb3-config", required: true }
-        },
-        inputs: 1,
-        outputs: 0,
-        icon: "font-awesome/fa-tasks",
-        label: function () {
-            return this.name || "influxdb3 batch";
-        }
-    });
+<script type="text/javascript">
+  RED.nodes.registerType("influxdb3 out", {
+    category: "storage-output",
+    color: "#44b39d",
+    defaults: {
+      name: { value: "" },
+      measurement: { value: "" },
+      influxdb: { type: "influxdb3-config", required: true }
+    },
+    inputs: 1,
+    outputs: 0,
+    icon: "font-awesome/fa-upload",
+    label: function () {
+      return this.name || "influxdb3 out";
+    }
+  });
+</script>
 
-    RED.nodes.registerType("influxdb3 in", {
-        category: "storage-input",
-        color: "#44b39d",
-        defaults: {
-            name: { value: "" },
-            query: { value: "" },
-            queryType: { value: "sql" },
-            influxdb: { type: "influxdb3-config", required: true }
-        },
-        inputs: 1,
-        outputs: 1,
-        icon: "font-awesome/fa-download",
-        label: function () {
-            return this.name || "influxdb3 in";
-        }
-    });
+<!-- InfluxDB 3.0 Batch Node -->
+<script type="text/html" data-template-name="influxdb3 batch">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-influxdb"><i class="fa fa-cog"></i> Server</label>
+    <input type="text" id="node-input-influxdb">
+  </div>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType("influxdb3 batch", {
+    category: "storage-output",
+    color: "#44b39d",
+    defaults: {
+      name: { value: "" },
+      influxdb: { type: "influxdb3-config", required: true }
+    },
+    inputs: 1,
+    outputs: 0,
+    icon: "font-awesome/fa-tasks",
+    label: function () {
+      return this.name || "influxdb3 batch";
+    }
+  });
+</script>
+
+<!-- InfluxDB 3.0 Input Node -->
+<script type="text/html" data-template-name="influxdb3 in">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name">
+  </div>
+  <div class="form-row">
+    <label for="node-input-influxdb"><i class="fa fa-cog"></i> Server</label>
+    <input type="text" id="node-input-influxdb">
+  </div>
+  <div class="form-row">
+    <label for="node-input-queryType"><i class="fa fa-code"></i> Query Type</label>
+    <select id="node-input-queryType">
+      <option value="sql">SQL</option>
+      <option value="influxql">InfluxQL</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-query"><i class="fa fa-terminal"></i> Query</label>
+    <input type="text" id="node-input-query" placeholder="SELECT * FROM ...">
+  </div>
+</script>
+
+<script type="text/javascript">
+  RED.nodes.registerType("influxdb3 in", {
+    category: "storage-input",
+    color: "#44b39d",
+    defaults: {
+      name: { value: "" },
+      query: { value: "" },
+      queryType: { value: "sql" },
+      influxdb: { type: "influxdb3-config", required: true }
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-download",
+    label: function () {
+      return this.name || "influxdb3 in";
+    }
+  });
 </script>
